@@ -2,100 +2,160 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)" />
 <title>이미지 2MB 리사이저</title>
 <meta name="description" content="JPG, PNG, HEIC 사진을 브라우저에서 바로 2MB 이하로 줄여줍니다. 서버로 업로드되지 않습니다." />
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --text: #1a1d23; --muted: #6b7280;
-    --border: #e3e6eb; --accent: #2563eb; --accent-weak: #e8efff;
+    --border: #e3e6eb; --accent: #2563eb; --accent-weak: #e8efff; --on-accent: #fff;
     --ok: #15803d; --err: #b91c1c;
+    --safe-b: env(safe-area-inset-bottom, 0px);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1115; --card: #181b21; --text: #e8eaee; --muted: #9aa1ad;
-      --border: #2a2f38; --accent: #6b9bff; --accent-weak: #1c2740;
+      --border: #2a2f38; --accent: #6b9bff; --accent-weak: #1c2740; --on-accent: #0b1020;
       --ok: #4ade80; --err: #f87171;
     }
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    touch-action: manipulation;
   }
-  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
-  h1 { font-size: 24px; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 24px; }
+  main {
+    max-width: 720px; margin: 0 auto;
+    padding: 24px max(16px, env(safe-area-inset-left)) calc(120px + var(--safe-b)) max(16px, env(safe-area-inset-right));
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  .sub b { color: var(--text); }
+
+  /* 선택 영역: 모바일에선 큰 탭 버튼, 데스크톱에선 드롭존 */
   .drop {
-    display: block; border: 2px dashed var(--border); border-radius: 14px;
-    background: var(--card); padding: 40px 16px; text-align: center; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    min-height: 168px; border: 2px dashed var(--border); border-radius: 16px;
+    background: var(--card); padding: 24px 16px; text-align: center; cursor: pointer;
     transition: border-color .15s, background .15s;
   }
-  .drop.over { border-color: var(--accent); background: var(--accent-weak); }
-  .drop strong { display: block; font-size: 17px; margin-bottom: 4px; }
+  .drop:active, .drop.over { border-color: var(--accent); background: var(--accent-weak); }
+  .drop svg { width: 36px; height: 36px; color: var(--accent); }
+  .drop strong { font-size: 17px; }
   .drop span { color: var(--muted); font-size: 13px; }
-  .drop input { display: none; }
-  .opts { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 16px 0; color: var(--muted); font-size: 14px; }
-  .opts select { font: inherit; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
-  .bar { display: flex; justify-content: space-between; align-items: center; margin: 24px 0 8px; gap: 8px; }
-  button {
-    font: inherit; border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer;
-    background: var(--accent); color: #fff;
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .desk { display: none; }
+  @media (hover: hover) and (pointer: fine) { .desk { display: inline; } .mob { display: none; } }
+
+  /* 목표 크기: 세그먼트 컨트롤 (터치 타깃 44px) */
+  .seg-wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 8px; }
+  .seg-wrap > span { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .seg { display: flex; flex: 1; max-width: 280px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 3px; }
+  .seg label { flex: 1; }
+  .seg input { position: absolute; opacity: 0; }
+  .seg span {
+    display: flex; align-items: center; justify-content: center; min-height: 40px;
+    border-radius: 9px; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer;
   }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-  button:disabled { opacity: .5; cursor: default; }
+  .seg input:checked + span { background: var(--accent); color: var(--on-accent); }
+  .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* 결과 목록 */
+  .status { color: var(--muted); font-size: 14px; margin: 20px 0 8px; min-height: 21px; }
   ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
   li {
-    display: grid; grid-template-columns: 56px 1fr auto; gap: 12px; align-items: center;
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
+    display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center;
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 10px;
   }
-  li img, li .ph { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--border); }
-  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { color: var(--muted); font-size: 13px; }
-  .meta .ok { color: var(--ok); } .meta .err { color: var(--err); }
+  li img, li .ph { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; background: var(--border); display: block; }
+  li .ph { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
   .info { min-width: 0; }
-  footer { margin-top: 40px; color: var(--muted); font-size: 12px; text-align: center; }
+  .name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .meta .ok { color: var(--ok); font-weight: 600; } .meta .err { color: var(--err); }
+
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 12px; min-height: 44px; padding: 0 16px;
+    cursor: pointer; background: var(--accent); color: var(--on-accent);
+  }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  button.sm { min-height: 40px; padding: 0 14px; font-size: 14px; background: var(--accent-weak); color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+
+  /* 좁은 화면: 저장 버튼을 카드 아래 전체 폭으로 */
+  @media (max-width: 420px) {
+    li { grid-template-columns: 56px 1fr; }
+    li img, li .ph { width: 56px; height: 56px; }
+    li .act { grid-column: 1 / -1; }
+    li .act button { width: 100%; }
+    li .act:empty { display: none; }
+  }
+
+  /* 하단 고정 액션바: 엄지 영역 + 홈 인디케이터 회피 */
+  .dock {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    padding: 12px max(16px, env(safe-area-inset-right)) calc(12px + var(--safe-b)) max(16px, env(safe-area-inset-left));
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+  }
+  .dock[hidden] { display: none; }
+  .dock .in { max-width: 720px; margin: 0 auto; display: flex; gap: 8px; }
+  .dock #saveAll { flex: 1; }
+
+  footer { margin-top: 32px; color: var(--muted); font-size: 12px; text-align: center; }
 </style>
 </head>
 <body>
 <main>
   <h1>이미지 2MB 리사이저</h1>
-  <p class="sub">JPG · PNG · HEIC(아이폰) · 안드로이드 사진을 2MB 이하로 줄여드려요. <b>모든 처리는 내 기기 안에서만</b> 이루어지고 서버로 업로드되지 않습니다.</p>
+  <p class="sub">JPG · PNG · 아이폰 HEIC · 안드로이드 사진을 원하는 크기 이하로 줄여드려요.<br><b>내 기기 안에서만 처리</b>되고 서버로 업로드되지 않습니다.</p>
 
   <label class="drop" id="drop">
     <input type="file" id="file" accept="image/*,.heic,.heif" multiple />
-    <strong>여기를 눌러 사진 선택 또는 끌어다 놓기</strong>
-    <span>여러 장 한 번에 가능 · 휴대폰에서는 앨범/카메라 선택</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+    <strong><span class="mob">탭해서 사진 선택</span><span class="desk">클릭하거나 사진을 끌어다 놓기</span></strong>
+    <span>여러 장 한 번에 선택 가능</span>
   </label>
 
-  <div class="opts">
-    <label>목표 크기
-      <select id="target">
-        <option value="1">1 MB</option>
-        <option value="2" selected>2 MB</option>
-        <option value="5">5 MB</option>
-      </select>
-    </label>
-  </div>
-
-  <div class="bar" id="bar" hidden>
-    <strong id="summary"></strong>
-    <div>
-      <button class="ghost" id="clear">지우기</button>
-      <button id="zipAll">전체 저장</button>
+  <div class="seg-wrap">
+    <span>목표 크기</span>
+    <div class="seg" role="radiogroup" aria-label="목표 크기">
+      <label><input type="radio" name="target" value="1" /><span>1 MB</span></label>
+      <label><input type="radio" name="target" value="2" checked /><span>2 MB</span></label>
+      <label><input type="radio" name="target" value="5" /><span>5 MB</span></label>
     </div>
   </div>
+
+  <div class="status" id="status" aria-live="polite"></div>
   <ul id="list"></ul>
 
   <footer>Canvas API로 브라우저에서 처리 · 원본 파일은 바뀌지 않습니다</footer>
 </main>
 
+<div class="dock" id="dock" hidden>
+  <div class="in">
+    <button class="ghost" id="clear">지우기</button>
+    <button id="saveAll" disabled>전체 저장</button>
+  </div>
+</div>
+
 <script>
 const MB = 1024 * 1024;
+// iOS Safari 캔버스 최대 면적(16,777,216px) 이하로 유지 — 초과 시 toBlob이 null 반환
+const MAX_PIXELS = 16_000_000;
 const $ = (id) => document.getElementById(id);
 const results = [];
+let busy = 0;
 
 const fmt = (b) => b >= MB ? (b / MB).toFixed(2) + ' MB' : Math.round(b / 1024) + ' KB';
+const isTouch = matchMedia('(pointer: coarse)').matches;
 
 function isHeic(file) {
   return /image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
@@ -108,7 +168,7 @@ async function loadHeic2any() {
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
       s.onload = () => res(window.heic2any);
-      s.onerror = () => rej(new Error('HEIC 변환 모듈을 불러오지 못했습니다'));
+      s.onerror = () => { heicLib = null; rej(new Error('HEIC 변환 모듈을 불러오지 못했습니다')); };
       document.head.appendChild(s);
     });
   }
@@ -128,6 +188,15 @@ async function decode(file) {
   }
 }
 
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
+// 캔버스 메모리 즉시 반환 (iOS는 누적되면 탭이 죽음)
+function release(canvas) { canvas.width = canvas.height = 0; }
+
 function hasAlpha(bitmap) {
   // 축소본에서 투명 픽셀 존재 여부만 빠르게 확인
   const w = Math.min(bitmap.width, 256), h = Math.min(bitmap.height, 256);
@@ -135,14 +204,9 @@ function hasAlpha(bitmap) {
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(bitmap, 0, 0, w, h);
   const d = ctx.getImageData(0, 0, w, h).data;
+  release(c);
   for (let i = 3; i < d.length; i += 4) if (d[i] < 255) return true;
   return false;
-}
-
-function makeCanvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  return c;
 }
 
 function render(bitmap, scale, fillWhite) {
@@ -156,8 +220,8 @@ function render(bitmap, scale, fillWhite) {
   return c;
 }
 
-const toBlob = (canvas, type, q) =>
-  new Promise((res) => canvas.toBlob(res, type, q));
+const toBlob = (canvas, type, q) => new Promise((res, rej) =>
+  canvas.toBlob((b) => b ? res(b) : rej(new Error('기기 메모리가 부족합니다')), type, q));
 
 // 출력 형식: 투명도가 있으면 WebP(투명 유지), 아니면 JPEG
 function chooseOutputType(file, alpha) {
@@ -167,26 +231,31 @@ function chooseOutputType(file, alpha) {
 // 핵심 알고리즘: 품질 이진 탐색 → 부족하면 해상도 축소 후 반복
 async function compress(bitmap, type, target) {
   const fillWhite = type === 'image/jpeg';
-  // 아주 큰 사진은 캔버스 메모리 한계(특히 iOS) 때문에 먼저 긴 변 기준으로 제한
-  let scale = Math.min(1, 8000 / Math.max(bitmap.width, bitmap.height));
+  let scale = Math.min(1, Math.sqrt(MAX_PIXELS / (bitmap.width * bitmap.height)));
 
   for (let attempt = 0; attempt < 12; attempt++) {
     const canvas = render(bitmap, scale, fillWhite);
-    let lo = 0.5, hi = 0.92, best = null;
+    const size = { w: canvas.width, h: canvas.height };
+    try {
+      let lo = 0.5, hi = 0.92, best = null;
+      const top = await toBlob(canvas, type, hi);
+      if (top.size <= target) return { blob: top, ...size };
 
-    const top = await toBlob(canvas, type, hi);
-    if (top.size <= target) return { blob: top, w: canvas.width, h: canvas.height };
-
-    for (let i = 0; i < 6; i++) {
-      const q = (lo + hi) / 2;
-      const b = await toBlob(canvas, type, q);
-      if (b.size <= target) { best = b; lo = q; } else { hi = q; }
+      const low = await toBlob(canvas, type, lo);
+      if (low.size <= target) {
+        best = low;
+        for (let i = 0; i < 5; i++) {
+          const q = (lo + hi) / 2;
+          const b = await toBlob(canvas, type, q);
+          if (b.size <= target) { best = b; lo = q; } else { hi = q; }
+        }
+        return { blob: best, ...size };
+      }
+      // 최저 품질로도 초과 → 크기 비율에 맞춰 해상도 축소 (파일 크기 ∝ 픽셀 수)
+      scale *= Math.max(0.5, Math.min(0.9, Math.sqrt(target / low.size) * 0.95));
+    } finally {
+      release(canvas);
     }
-    if (best) return { blob: best, w: canvas.width, h: canvas.height };
-
-    // 최저 품질로도 초과 → 크기 비율에 맞춰 해상도 축소 (파일 크기 ∝ 픽셀 수)
-    const low = await toBlob(canvas, type, 0.5);
-    scale *= Math.max(0.5, Math.min(0.9, Math.sqrt(target / low.size) * 0.95));
   }
   throw new Error('목표 크기까지 줄이지 못했습니다');
 }
@@ -197,19 +266,41 @@ function outName(name, type) {
   return `${base}_resized.${ext}`;
 }
 
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+// 저장 전략: 휴대폰은 공유 시트(→ "이미지 저장"으로 사진 앱에 저장),
+// 데스크톱은 일반 다운로드. 사용자가 공유 시트를 닫으면(AbortError) 조용히 무시.
+async function saveFiles(items) {
+  const files = items.map((r) => new File([r.blob], r.name, { type: r.blob.type }));
+  if (isTouch && navigator.canShare?.({ files })) {
+    try { await navigator.share({ files }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  for (const r of items) {
+    download(r.blob, r.name);
+    await new Promise((res) => setTimeout(res, 300));
+  }
+}
+
 function addRow(file) {
   const li = document.createElement('li');
   li.innerHTML = `<div class="ph"></div>
-    <div class="info"><div class="name"></div><div class="meta">처리 중…</div></div>
+    <div class="info"><div class="name"></div><div class="meta">대기 중…</div></div>
     <div class="act"></div>`;
   li.querySelector('.name').textContent = file.name;
   $('list').appendChild(li);
   return li;
 }
 
-async function handle(file, target) {
-  const li = addRow(file);
+async function handle(file, li, target) {
   const meta = li.querySelector('.meta');
+  meta.textContent = '처리 중…';
   try {
     const bitmap = await decode(file);
     const alpha = /png|webp|gif/i.test(file.type) && hasAlpha(bitmap);
@@ -217,28 +308,44 @@ async function handle(file, target) {
     const { blob, w, h } = await compress(bitmap, type, target);
     bitmap.close?.();
 
-    const url = URL.createObjectURL(blob);
-    const name = outName(file.name, type);
-    results.push({ url, name });
+    const item = { blob, name: outName(file.name, type), url: URL.createObjectURL(blob) };
+    results.push(item);
 
     const img = document.createElement('img');
-    img.src = url; img.alt = '';
+    img.src = item.url; img.alt = ''; img.decoding = 'async';
     li.querySelector('.ph').replaceWith(img);
     meta.innerHTML = `${fmt(file.size)} → <span class="ok">${fmt(blob.size)}</span> · ${w}×${h}`;
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    a.innerHTML = '<button>저장</button>';
-    li.querySelector('.act').appendChild(a);
+    const btn = document.createElement('button');
+    btn.className = 'sm';
+    btn.textContent = '저장';
+    btn.onclick = () => saveFiles([item]);
+    li.querySelector('.act').appendChild(btn);
   } catch (e) {
-    meta.innerHTML = `<span class="err">${e.message}</span>`;
+    li.querySelector('.ph')?.style.setProperty('animation', 'none');
+    meta.innerHTML = `<span class="err"></span>`;
+    meta.firstChild.textContent = e.message || '처리 실패';
   }
 }
 
+function updateStatus(done, total) {
+  $('status').textContent = done < total ? `처리 중 ${done} / ${total}` : `${results.length}개 완료`;
+  $('saveAll').disabled = results.length === 0;
+  $('saveAll').textContent = results.length > 1 ? `전체 저장 (${results.length})` : '저장';
+}
+
 async function processFiles(files) {
-  const target = Number($('target').value) * MB * 0.98; // 2MB 경계 여유분
-  $('bar').hidden = false;
-  for (const f of files) await handle(f, target); // 순차 처리로 휴대폰 메모리 보호
-  $('summary').textContent = `${results.length}개 완료`;
+  files = files.filter((f) => f.type.startsWith('image/') || isHeic(f));
+  if (!files.length) return;
+  const target = Number(document.querySelector('input[name=target]:checked').value) * MB * 0.98; // 경계 여유분
+  $('dock').hidden = false;
+  const rows = files.map(addRow);
+  busy++;
+  for (let i = 0; i < files.length; i++) { // 순차 처리로 휴대폰 메모리 보호
+    updateStatus(i, files.length);
+    await handle(files[i], rows[i], target);
+  }
+  busy--;
+  updateStatus(files.length, files.length);
 }
 
 $('file').addEventListener('change', (e) => { processFiles([...e.target.files]); e.target.value = ''; });
@@ -247,16 +354,11 @@ const drop = $('drop');
 ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', (e) => processFiles([...e.dataTransfer.files]));
 
-$('zipAll').addEventListener('click', async () => {
-  for (const r of results) {
-    const a = document.createElement('a');
-    a.href = r.url; a.download = r.name; a.click();
-    await new Promise((r) => setTimeout(r, 300));
-  }
-});
+$('saveAll').addEventListener('click', () => saveFiles(results));
 $('clear').addEventListener('click', () => {
+  if (busy) return;
   results.forEach((r) => URL.revokeObjectURL(r.url));
-  results.length = 0; $('list').innerHTML = ''; $('bar').hidden = true;
+  results.length = 0; $('list').innerHTML = ''; $('status').textContent = ''; $('dock').hidden = true;
 });
 </script>
 </body>
