@@ -109,6 +109,11 @@
   .dock .in { max-width: 720px; margin: 0 auto; display: flex; gap: 8px; }
   .dock #saveAll { flex: 1; }
 
+.tip { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+  .tip b { color: var(--text); }
+  .hint { margin: 16px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-weak); font-size: 14px; }
+  .hint[hidden] { display: none; }
+  li img { -webkit-touch-callout: default; }
   footer { margin-top: 32px; color: var(--muted); font-size: 12px; text-align: center; }
 </style>
 </head>
@@ -133,6 +138,11 @@
     </div>
   </div>
 
+  <p class="tip mob">저장을 누르면 공유 창이 열려요. <b>'이미지 저장'</b>을 누르면 사진 앱에 저장됩니다.</p>
+  <div class="hint" id="hint" hidden>
+    이 브라우저에서는 사진 앱으로 바로 저장할 수 없어요.<br>
+    <b>미리보기 이미지를 길게 눌러 '사진 앱에 저장'</b>하거나, Safari·Chrome으로 열어 주세요.
+  </div>
   <div class="status" id="status" aria-live="polite"></div>
   <ul id="list"></ul>
 
@@ -223,9 +233,10 @@ function render(bitmap, scale, fillWhite) {
 const toBlob = (canvas, type, q) => new Promise((res, rej) =>
   canvas.toBlob((b) => b ? res(b) : rej(new Error('기기 메모리가 부족합니다')), type, q));
 
-// 출력 형식: 투명도가 있으면 WebP(투명 유지), 아니면 JPEG
+// 출력 형식: 휴대폰은 사진 앱 호환을 위해 항상 JPEG(투명 → 흰 배경),
+// 데스크톱은 투명도가 있으면 WebP로 투명 유지
 function chooseOutputType(file, alpha) {
-  return alpha ? 'image/webp' : 'image/jpeg';
+  return alpha && !isTouch ? 'image/webp' : 'image/jpeg';
 }
 
 // 핵심 알고리즘: 품질 이진 탐색 → 부족하면 해상도 축소 후 반복
@@ -278,14 +289,25 @@ function download(blob, name) {
 // 데스크톱은 일반 다운로드. 사용자가 공유 시트를 닫으면(AbortError) 조용히 무시.
 async function saveFiles(items) {
   const files = items.map((r) => new File([r.blob], r.name, { type: r.blob.type }));
-  if (isTouch && navigator.canShare?.({ files })) {
-    try { await navigator.share({ files }); return; }
-    catch (e) { if (e.name === 'AbortError') return; }
+  if (isTouch) {
+    // share()는 탭 직후(사용자 제스처 안)에 호출돼야 하므로 앞에 await를 두지 않음
+    if (navigator.canShare?.({ files })) {
+      try { await navigator.share({ files }); }
+      catch (e) { if (e.name !== 'AbortError') showHint(); }
+    } else {
+      showHint(); // 카카오톡 등 앱 내 브라우저: 다운로드하면 '파일'로 가버리므로 안내만
+    }
+    return;
   }
   for (const r of items) {
     download(r.blob, r.name);
     await new Promise((res) => setTimeout(res, 300));
   }
+}
+
+function showHint() {
+  $('hint').hidden = false;
+  $('hint').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function addRow(file) {
@@ -317,7 +339,7 @@ async function handle(file, li, target) {
     meta.innerHTML = `${fmt(file.size)} → <span class="ok">${fmt(blob.size)}</span> · ${w}×${h}`;
     const btn = document.createElement('button');
     btn.className = 'sm';
-    btn.textContent = '저장';
+    btn.textContent = isTouch ? '사진에 저장' : '저장';
     btn.onclick = () => saveFiles([item]);
     li.querySelector('.act').appendChild(btn);
   } catch (e) {
@@ -330,7 +352,8 @@ async function handle(file, li, target) {
 function updateStatus(done, total) {
   $('status').textContent = done < total ? `처리 중 ${done} / ${total}` : `${results.length}개 완료`;
   $('saveAll').disabled = results.length === 0;
-  $('saveAll').textContent = results.length > 1 ? `전체 저장 (${results.length})` : '저장';
+  const label = isTouch ? '사진에 저장' : '저장';
+  $('saveAll').textContent = results.length > 1 ? `전체 ${label} (${results.length})` : label;
 }
 
 async function processFiles(files) {
