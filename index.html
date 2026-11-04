@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
 <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)" />
-<title>이미지 2MB 리사이저</title>
-<meta name="description" content="JPG, PNG, HEIC 사진을 브라우저에서 바로 2MB 이하로 줄여줍니다. 서버로 업로드되지 않습니다." />
+<title>인감 이미지 리사이저</title>
+<meta name="description" content="JPG, PNG, HEIC 사진을 브라우저에서 바로 1.8MB 이하로 줄여줍니다. 서버로 업로드되지 않습니다." />
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --text: #1a1d23; --muted: #6b7280;
@@ -52,21 +52,8 @@
   .desk { display: none; }
   @media (hover: hover) and (pointer: fine) { .desk { display: inline; } .mob { display: none; } }
 
-  /* 목표 크기: 세그먼트 컨트롤 (터치 타깃 44px) */
-  .seg-wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 8px; }
-  .seg-wrap > span { color: var(--muted); font-size: 14px; white-space: nowrap; }
-  .seg { display: flex; flex: 1; max-width: 280px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 3px; }
-  .seg label { flex: 1; }
-  .seg input { position: absolute; opacity: 0; }
-  .seg span {
-    display: flex; align-items: center; justify-content: center; min-height: 40px;
-    border-radius: 9px; font-size: 15px; font-weight: 600; color: var(--muted); cursor: pointer;
-  }
-  .seg input:checked + span { background: var(--accent); color: var(--on-accent); }
-  .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
-
   /* 결과 목록 */
-  .status { color: var(--muted); font-size: 14px; margin: 20px 0 8px; min-height: 21px; }
+  .status { color: var(--muted); font-size: 14px; margin: 16px 0 8px; min-height: 21px; }
   ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
   li {
     display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center;
@@ -119,26 +106,19 @@
 </head>
 <body>
 <main>
-  <h1>이미지 2MB 리사이저</h1>
-  <p class="sub">JPG · PNG · 아이폰 HEIC · 안드로이드 사진을 원하는 크기 이하로 줄여드려요.<br><b>내 기기 안에서만 처리</b>되고 서버로 업로드되지 않습니다.</p>
+  <h1>인감 이미지 리사이저</h1>
+  <p class="sub">JPG · PNG · 아이폰 HEIC · 안드로이드 사진을 전자서명 업로드용 <b>1.8MB 이하</b>로 줄여드려요.<br><b>내 기기 안에서만 처리</b>되고 서버로 업로드되지 않습니다.</p>
 
   <label class="drop" id="drop">
     <input type="file" id="file" accept="image/*,.heic,.heif" multiple />
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
     <strong><span class="mob">탭해서 사진 선택</span><span class="desk">클릭하거나 사진을 끌어다 놓기</span></strong>
-    <span>여러 장 한 번에 선택 가능</span>
+    <span>여러 장 한 번에 선택 가능 · 투명 배경 PNG는 투명도 유지</span>
   </label>
 
-  <div class="seg-wrap">
-    <span>목표 크기</span>
-    <div class="seg" role="radiogroup" aria-label="목표 크기">
-      <label><input type="radio" name="target" value="1" /><span>1 MB</span></label>
-      <label><input type="radio" name="target" value="2" checked /><span>2 MB</span></label>
-      <label><input type="radio" name="target" value="5" /><span>5 MB</span></label>
-    </div>
-  </div>
 
-  <p class="tip mob">저장을 누르면 공유 창이 열려요. <b>'이미지 저장'</b>을 누르면 사진 앱에 저장됩니다.</p>
+  <p class="tip tip-ios">저장을 누르면 공유 창이 열려요. <b>'이미지 저장'</b>을 누르면 사진 앱에 저장됩니다.</p>
+  <p class="tip tip-android">저장한 이미지는 <b>다운로드 폴더</b>에 들어가고, 갤러리 앱에서도 볼 수 있어요.</p>
   <div class="hint" id="hint" hidden>
     이 브라우저에서는 사진 앱으로 바로 저장할 수 없어요.<br>
     <b>미리보기 이미지를 길게 눌러 '사진 앱에 저장'</b>하거나, Safari·Chrome으로 열어 주세요.
@@ -156,233 +136,6 @@
   </div>
 </div>
 
-<script>
-const MB = 1024 * 1024;
-// iOS Safari 캔버스 최대 면적(16,777,216px) 이하로 유지 — 초과 시 toBlob이 null 반환
-const MAX_PIXELS = 16_000_000;
-const $ = (id) => document.getElementById(id);
-const results = [];
-let busy = 0;
-
-const fmt = (b) => b >= MB ? (b / MB).toFixed(2) + ' MB' : Math.round(b / 1024) + ' KB';
-const isTouch = matchMedia('(pointer: coarse)').matches;
-
-function isHeic(file) {
-  return /image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
-}
-
-let heicLib;
-async function loadHeic2any() {
-  if (!heicLib) {
-    heicLib = new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
-      s.onload = () => res(window.heic2any);
-      s.onerror = () => { heicLib = null; rej(new Error('HEIC 변환 모듈을 불러오지 못했습니다')); };
-      document.head.appendChild(s);
-    });
-  }
-  return heicLib;
-}
-
-// 디코딩: EXIF 회전 자동 적용. HEIC는 Safari면 네이티브, 그 외엔 heic2any(WASM, 브라우저 내 변환)
-async function decode(file) {
-  try {
-    return await createImageBitmap(file, { imageOrientation: 'from-image' });
-  } catch (e) {
-    if (!isHeic(file)) throw new Error('이미지를 읽을 수 없습니다');
-    const heic2any = await loadHeic2any();
-    const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
-    const blob = Array.isArray(out) ? out[0] : out;
-    return await createImageBitmap(blob, { imageOrientation: 'from-image' });
-  }
-}
-
-function makeCanvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  return c;
-}
-
-// 캔버스 메모리 즉시 반환 (iOS는 누적되면 탭이 죽음)
-function release(canvas) { canvas.width = canvas.height = 0; }
-
-function hasAlpha(bitmap) {
-  // 축소본에서 투명 픽셀 존재 여부만 빠르게 확인
-  const w = Math.min(bitmap.width, 256), h = Math.min(bitmap.height, 256);
-  const c = makeCanvas(w, h);
-  const ctx = c.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  const d = ctx.getImageData(0, 0, w, h).data;
-  release(c);
-  for (let i = 3; i < d.length; i += 4) if (d[i] < 255) return true;
-  return false;
-}
-
-function render(bitmap, scale, fillWhite) {
-  const w = Math.max(1, Math.round(bitmap.width * scale));
-  const h = Math.max(1, Math.round(bitmap.height * scale));
-  const c = makeCanvas(w, h);
-  const ctx = c.getContext('2d');
-  if (fillWhite) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  return c;
-}
-
-const toBlob = (canvas, type, q) => new Promise((res, rej) =>
-  canvas.toBlob((b) => b ? res(b) : rej(new Error('기기 메모리가 부족합니다')), type, q));
-
-// 출력 형식: 휴대폰은 사진 앱 호환을 위해 항상 JPEG(투명 → 흰 배경),
-// 데스크톱은 투명도가 있으면 WebP로 투명 유지
-function chooseOutputType(file, alpha) {
-  return alpha && !isTouch ? 'image/webp' : 'image/jpeg';
-}
-
-// 핵심 알고리즘: 품질 이진 탐색 → 부족하면 해상도 축소 후 반복
-async function compress(bitmap, type, target) {
-  const fillWhite = type === 'image/jpeg';
-  let scale = Math.min(1, Math.sqrt(MAX_PIXELS / (bitmap.width * bitmap.height)));
-
-  for (let attempt = 0; attempt < 12; attempt++) {
-    const canvas = render(bitmap, scale, fillWhite);
-    const size = { w: canvas.width, h: canvas.height };
-    try {
-      let lo = 0.5, hi = 0.92, best = null;
-      const top = await toBlob(canvas, type, hi);
-      if (top.size <= target) return { blob: top, ...size };
-
-      const low = await toBlob(canvas, type, lo);
-      if (low.size <= target) {
-        best = low;
-        for (let i = 0; i < 5; i++) {
-          const q = (lo + hi) / 2;
-          const b = await toBlob(canvas, type, q);
-          if (b.size <= target) { best = b; lo = q; } else { hi = q; }
-        }
-        return { blob: best, ...size };
-      }
-      // 최저 품질로도 초과 → 크기 비율에 맞춰 해상도 축소 (파일 크기 ∝ 픽셀 수)
-      scale *= Math.max(0.5, Math.min(0.9, Math.sqrt(target / low.size) * 0.95));
-    } finally {
-      release(canvas);
-    }
-  }
-  throw new Error('목표 크기까지 줄이지 못했습니다');
-}
-
-function outName(name, type) {
-  const base = name.replace(/\.[^.]+$/, '');
-  const ext = type === 'image/webp' ? 'webp' : 'jpg';
-  return `${base}_resized.${ext}`;
-}
-
-function download(blob, name) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
-
-// 저장 전략: 휴대폰은 공유 시트(→ "이미지 저장"으로 사진 앱에 저장),
-// 데스크톱은 일반 다운로드. 사용자가 공유 시트를 닫으면(AbortError) 조용히 무시.
-async function saveFiles(items) {
-  const files = items.map((r) => new File([r.blob], r.name, { type: r.blob.type }));
-  if (isTouch) {
-    // share()는 탭 직후(사용자 제스처 안)에 호출돼야 하므로 앞에 await를 두지 않음
-    if (navigator.canShare?.({ files })) {
-      try { await navigator.share({ files }); }
-      catch (e) { if (e.name !== 'AbortError') showHint(); }
-    } else {
-      showHint(); // 카카오톡 등 앱 내 브라우저: 다운로드하면 '파일'로 가버리므로 안내만
-    }
-    return;
-  }
-  for (const r of items) {
-    download(r.blob, r.name);
-    await new Promise((res) => setTimeout(res, 300));
-  }
-}
-
-function showHint() {
-  $('hint').hidden = false;
-  $('hint').scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-function addRow(file) {
-  const li = document.createElement('li');
-  li.innerHTML = `<div class="ph"></div>
-    <div class="info"><div class="name"></div><div class="meta">대기 중…</div></div>
-    <div class="act"></div>`;
-  li.querySelector('.name').textContent = file.name;
-  $('list').appendChild(li);
-  return li;
-}
-
-async function handle(file, li, target) {
-  const meta = li.querySelector('.meta');
-  meta.textContent = '처리 중…';
-  try {
-    const bitmap = await decode(file);
-    const alpha = /png|webp|gif/i.test(file.type) && hasAlpha(bitmap);
-    const type = chooseOutputType(file, alpha);
-    const { blob, w, h } = await compress(bitmap, type, target);
-    bitmap.close?.();
-
-    const item = { blob, name: outName(file.name, type), url: URL.createObjectURL(blob) };
-    results.push(item);
-
-    const img = document.createElement('img');
-    img.src = item.url; img.alt = ''; img.decoding = 'async';
-    li.querySelector('.ph').replaceWith(img);
-    meta.innerHTML = `${fmt(file.size)} → <span class="ok">${fmt(blob.size)}</span> · ${w}×${h}`;
-    const btn = document.createElement('button');
-    btn.className = 'sm';
-    btn.textContent = isTouch ? '사진에 저장' : '저장';
-    btn.onclick = () => saveFiles([item]);
-    li.querySelector('.act').appendChild(btn);
-  } catch (e) {
-    li.querySelector('.ph')?.style.setProperty('animation', 'none');
-    meta.innerHTML = `<span class="err"></span>`;
-    meta.firstChild.textContent = e.message || '처리 실패';
-  }
-}
-
-function updateStatus(done, total) {
-  $('status').textContent = done < total ? `처리 중 ${done} / ${total}` : `${results.length}개 완료`;
-  $('saveAll').disabled = results.length === 0;
-  const label = isTouch ? '사진에 저장' : '저장';
-  $('saveAll').textContent = results.length > 1 ? `전체 ${label} (${results.length})` : label;
-}
-
-async function processFiles(files) {
-  files = files.filter((f) => f.type.startsWith('image/') || isHeic(f));
-  if (!files.length) return;
-  const target = Number(document.querySelector('input[name=target]:checked').value) * MB * 0.98; // 경계 여유분
-  $('dock').hidden = false;
-  const rows = files.map(addRow);
-  busy++;
-  for (let i = 0; i < files.length; i++) { // 순차 처리로 휴대폰 메모리 보호
-    updateStatus(i, files.length);
-    await handle(files[i], rows[i], target);
-  }
-  busy--;
-  updateStatus(files.length, files.length);
-}
-
-$('file').addEventListener('change', (e) => { processFiles([...e.target.files]); e.target.value = ''; });
-const drop = $('drop');
-['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
-['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', (e) => processFiles([...e.dataTransfer.files]));
-
-$('saveAll').addEventListener('click', () => saveFiles(results));
-$('clear').addEventListener('click', () => {
-  if (busy) return;
-  results.forEach((r) => URL.revokeObjectURL(r.url));
-  results.length = 0; $('list').innerHTML = ''; $('status').textContent = ''; $('dock').hidden = true;
-});
-</script>
+<script src="app.js"></script>
 </body>
 </html>
