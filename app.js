@@ -25,7 +25,7 @@ async function loadHeic2any() {
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
       s.onload = () => res(window.heic2any);
-      s.onerror = () => { heicLib = null; rej(new Error('사진을 변환하지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.')); };
+      s.onerror = () => { heicLib = null; rej(new Error('사진을 변환하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주십시오.')); };
       document.head.appendChild(s);
     });
   }
@@ -37,7 +37,7 @@ async function decode(file) {
   try {
     return await createImageBitmap(file, { imageOrientation: 'from-image' });
   } catch (e) {
-    if (!isHeic(file)) throw new Error('이 사진은 열 수 없어요. 휴대폰 카메라로 찍은 사진을 골라 주세요.');
+    if (!isHeic(file)) throw new Error('이 사진은 열 수 없습니다. 휴대폰 카메라로 찍은 사진을 골라 주십시오.');
     const heic2any = await loadHeic2any();
     const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
     const blob = Array.isArray(out) ? out[0] : out;
@@ -78,7 +78,7 @@ function render(bitmap, scale, fillWhite) {
 }
 
 const toBlob = (canvas, type, q) => new Promise((res, rej) =>
-  canvas.toBlob((b) => b ? res(b) : rej(new Error('사진이 너무 커서 처리하지 못했어요. 다른 사진으로 다시 시도해 주세요.')), type, q));
+  canvas.toBlob((b) => b ? res(b) : rej(new Error('사진이 너무 커서 처리하지 못했습니다. 다른 사진으로 다시 시도해 주십시오.')), type, q));
 
 // 출력 형식: 전자서명 서비스가 받는 JPG/PNG만 사용.
 // 투명 배경 인감은 PNG로 투명 유지, 그 외는 JPEG
@@ -116,7 +116,7 @@ async function compress(bitmap, type, target) {
       release(canvas);
     }
   }
-  throw new Error('용량을 충분히 줄이지 못했어요. 다른 사진으로 다시 시도해 주세요.');
+  throw new Error('용량을 충분히 줄이지 못했습니다. 다른 사진으로 다시 시도해 주십시오.');
 }
 
 function outName(name, type) {
@@ -171,16 +171,16 @@ function showHint() {
 // 저장 위치는 OS마다 달라서 버튼 이름과 안내 문구도 다르게
 $('saveLabel').textContent = isIOS ? '사진에 저장하기' : '저장하기';
 $('saveTip').innerHTML = isIOS
-  ? "누르면 창이 열려요. 거기서 <b>'이미지 저장'</b>을 눌러 주세요."
+  ? "누르면 창이 열립니다. 거기서 <b>'이미지 저장'</b>을 눌러 주십시오."
   : isTouch
-    ? "저장한 사진은 <b>갤러리 앱의 다운로드(Download) 폴더</b>에서 찾을 수 있어요."
-    : '<b>다운로드 폴더</b>에 저장돼요.';
+    ? "저장한 사진은 <b>갤러리 앱의 다운로드(Download) 폴더</b>에서 찾을 수 있습니다."
+    : '<b>다운로드 폴더</b>에 저장됩니다.';
 
 async function processFiles(files) {
   if (busy || !files.length) return;
   const file = files.find((f) => f.type.startsWith('image/') || isHeic(f));
   if (!file) {
-    showError('사진 파일이 아니에요', '도장을 찍은 사진을 골라 주세요.');
+    showError('사진 파일이 아닙니다', '도장을 찍은 사진을 골라 주십시오.');
     return;
   }
 
@@ -196,11 +196,11 @@ async function processFiles(files) {
 
     current = { blob, name: outName(file.name, type), url: URL.createObjectURL(blob) };
     $('preview').src = current.url;
-    $('sizes').innerHTML = `${fmt(file.size)} → <b>${fmt(blob.size)}</b> 로 줄었어요.<br>이제 전자계약에 올릴 수 있어요.`;
+    $('sizes').innerHTML = `${fmt(file.size)} → <b>${fmt(blob.size)}</b> 로 줄었습니다.<br>이제 전자계약에 올릴 수 있습니다.`;
     $('hint').hidden = true;
     show('viewDone');
   } catch (e) {
-    showError('사진을 줄이지 못했어요', e.message || '다른 사진으로 다시 시도해 주세요.');
+    showError('사진을 줄이지 못했습니다', e.message || '다른 사진으로 다시 시도해 주십시오.');
   } finally {
     busy = false;
     window.scrollTo({ top: 0 });
