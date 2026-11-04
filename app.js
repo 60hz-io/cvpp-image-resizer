@@ -5,8 +5,8 @@ const MB = 1_000_000; // 표시는 iPhone/macOS와 같은 10진 단위
 // iOS Safari 캔버스 최대 면적(16,777,216px) 이하로 유지 — 초과 시 toBlob이 null 반환
 const MAX_PIXELS = 16_000_000;
 const $ = (id) => document.getElementById(id);
-const results = [];
-let busy = 0;
+let current = null; // { blob, name, url }
+let busy = false;
 
 const fmt = (b) => b >= MB ? (b / MB).toFixed(2) + ' MB' : Math.round(b / 1000) + ' KB';
 const isTouch = matchMedia('(pointer: coarse)').matches;
@@ -25,7 +25,7 @@ async function loadHeic2any() {
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
       s.onload = () => res(window.heic2any);
-      s.onerror = () => { heicLib = null; rej(new Error('HEIC 변환 모듈을 불러오지 못했습니다')); };
+      s.onerror = () => { heicLib = null; rej(new Error('사진을 변환하지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.')); };
       document.head.appendChild(s);
     });
   }
@@ -37,7 +37,7 @@ async function decode(file) {
   try {
     return await createImageBitmap(file, { imageOrientation: 'from-image' });
   } catch (e) {
-    if (!isHeic(file)) throw new Error('이미지를 읽을 수 없습니다');
+    if (!isHeic(file)) throw new Error('이 사진은 열 수 없어요. 휴대폰 카메라로 찍은 사진을 골라 주세요.');
     const heic2any = await loadHeic2any();
     const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
     const blob = Array.isArray(out) ? out[0] : out;
@@ -78,7 +78,7 @@ function render(bitmap, scale, fillWhite) {
 }
 
 const toBlob = (canvas, type, q) => new Promise((res, rej) =>
-  canvas.toBlob((b) => b ? res(b) : rej(new Error('기기 메모리가 부족합니다')), type, q));
+  canvas.toBlob((b) => b ? res(b) : rej(new Error('사진이 너무 커서 처리하지 못했어요. 다른 사진으로 다시 시도해 주세요.')), type, q));
 
 // 출력 형식: 전자서명 서비스가 받는 JPG/PNG만 사용.
 // 투명 배경 인감은 PNG로 투명 유지, 그 외는 JPEG
@@ -116,7 +116,7 @@ async function compress(bitmap, type, target) {
       release(canvas);
     }
   }
-  throw new Error('목표 크기까지 줄이지 못했습니다');
+  throw new Error('용량을 충분히 줄이지 못했어요. 다른 사진으로 다시 시도해 주세요.');
 }
 
 function outName(name, type) {
@@ -133,8 +133,7 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-// 저장 전략: 휴대폰은 공유 시트(→ "이미지 저장"으로 사진 앱에 저장),
-// 데스크톱은 일반 다운로드. 사용자가 공유 시트를 닫으면(AbortError) 조용히 무시.
+// 저장 전략. 사용자가 공유 시트를 닫으면(AbortError) 조용히 무시.
 async function saveFile(item) {
   const files = [new File([item.blob], item.name, { type: item.blob.type })];
   // iOS: 다운로드는 '파일' 앱으로 가므로 공유 시트("이미지 저장")로 사진 앱에 저장.
@@ -152,79 +151,67 @@ async function saveFile(item) {
   download(item.blob, item.name);
 }
 
-document.querySelector(isIOS ? '.tip-android' : '.tip-ios')?.remove();
-if (!isTouch) document.querySelectorAll('.tip').forEach((el) => el.remove());
+// ---------- 화면 ----------
+const views = ['viewStart', 'viewBusy', 'viewDone', 'viewError'];
+function show(id) {
+  views.forEach((v) => { $(v).hidden = v !== id; });
+}
+
+function showError(title, body) {
+  $('errTitle').textContent = title;
+  $('errBody').textContent = body;
+  show('viewError');
+}
 
 function showHint() {
   $('hint').hidden = false;
   $('hint').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function addRow(file) {
-  const li = document.createElement('li');
-  li.innerHTML = `<div class="ph"></div>
-    <div class="info"><div class="name"></div><div class="meta">대기 중…</div></div>
-    <div class="act"></div>`;
-  li.querySelector('.name').textContent = file.name;
-  $('list').appendChild(li);
-  return li;
-}
+// 저장 위치는 OS마다 달라서 버튼 이름과 안내 문구도 다르게
+$('saveLabel').textContent = isIOS ? '사진에 저장하기' : '저장하기';
+$('saveTip').innerHTML = isIOS
+  ? "누르면 창이 열려요. 거기서 <b>'이미지 저장'</b>을 눌러 주세요."
+  : isTouch
+    ? "저장한 사진은 <b>갤러리 앱의 다운로드(Download) 폴더</b>에서 찾을 수 있어요."
+    : '<b>다운로드 폴더</b>에 저장돼요.';
 
-async function handle(file, li, target) {
-  const meta = li.querySelector('.meta');
-  meta.textContent = '처리 중…';
+async function processFiles(files) {
+  if (busy || !files.length) return;
+  const file = files.find((f) => f.type.startsWith('image/') || isHeic(f));
+  if (!file) {
+    showError('사진 파일이 아니에요', '도장을 찍은 사진을 골라 주세요.');
+    return;
+  }
+
+  busy = true;
+  show('viewBusy');
+  if (current) { URL.revokeObjectURL(current.url); current = null; }
   try {
     const bitmap = await decode(file);
     const alpha = /png|webp|gif/i.test(file.type) && hasAlpha(bitmap);
     const type = chooseOutputType(file, alpha);
-    const { blob, w, h } = await compress(bitmap, type, target);
+    const { blob } = await compress(bitmap, type, TARGET_BYTES);
     bitmap.close?.();
 
-    const item = { blob, name: outName(file.name, type), url: URL.createObjectURL(blob) };
-    results.push(item);
-
-    const img = document.createElement('img');
-    img.src = item.url; img.alt = ''; img.decoding = 'async';
-    li.querySelector('.ph').replaceWith(img);
-    meta.innerHTML = `${fmt(file.size)} → <span class="ok">${fmt(blob.size)}</span> · ${w}×${h}`;
-    const btn = document.createElement('button');
-    btn.className = 'sm';
-    btn.textContent = isIOS ? '사진에 저장' : '저장';
-    btn.onclick = () => saveFile(item);
-    li.querySelector('.act').appendChild(btn);
+    current = { blob, name: outName(file.name, type), url: URL.createObjectURL(blob) };
+    $('preview').src = current.url;
+    $('sizes').innerHTML = `${fmt(file.size)} → <b>${fmt(blob.size)}</b> 로 줄었어요.<br>이제 전자계약에 올릴 수 있어요.`;
+    $('hint').hidden = true;
+    show('viewDone');
   } catch (e) {
-    li.querySelector('.ph')?.style.setProperty('animation', 'none');
-    meta.innerHTML = `<span class="err"></span>`;
-    meta.firstChild.textContent = e.message || '처리 실패';
+    showError('사진을 줄이지 못했어요', e.message || '다른 사진으로 다시 시도해 주세요.');
+  } finally {
+    busy = false;
+    window.scrollTo({ top: 0 });
   }
 }
 
-function reset() {
-  results.forEach((r) => URL.revokeObjectURL(r.url));
-  results.length = 0; $('list').innerHTML = ''; $('status').textContent = ''; $('dock').hidden = true;
-}
-
-// 인감 이미지는 한 장만 처리. 새 사진을 고르면 이전 결과를 대체
-async function processFiles(files) {
-  const file = files.find((f) => f.type.startsWith('image/') || isHeic(f));
-  if (!file || busy) return;
-  reset();
-  $('dock').hidden = false;
-  $('saveAll').disabled = true;
-  $('status').textContent = '처리 중…';
-  busy++;
-  await handle(file, addRow(file), TARGET_BYTES);
-  busy--;
-  $('status').textContent = results.length ? '완료' : '';
-  $('saveAll').disabled = results.length === 0;
-  $('saveAll').textContent = isIOS ? '사진에 저장' : '저장';
-}
-
 $('file').addEventListener('change', (e) => { processFiles([...e.target.files]); e.target.value = ''; });
-const drop = $('drop');
-['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
-['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', (e) => processFiles([...e.dataTransfer.files]));
+$('save').addEventListener('click', () => current && saveFile(current));
 
-$('saveAll').addEventListener('click', () => results[0] && saveFile(results[0]));
-$('clear').addEventListener('click', () => { if (!busy) reset(); });
+// 데스크톱: 화면 어디든 끌어다 놓기
+const drop = $('drop');
+['dragenter', 'dragover'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+document.addEventListener('drop', (e) => processFiles([...e.dataTransfer.files]));

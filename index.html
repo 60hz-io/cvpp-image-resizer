@@ -3,139 +3,180 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
-<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)" />
-<title>인감 이미지 리사이저</title>
-<meta name="description" content="JPG, PNG, HEIC 사진을 브라우저에서 바로 1.8MB 이하로 줄여줍니다. 서버로 업로드되지 않습니다." />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)" />
+<title>RE100 인감 이미지 용량 줄이기</title>
+<meta name="description" content="도장 사진을 전자계약에 올릴 수 있도록 2MB보다 작게 줄여 드려요. 사진은 기기 밖으로 전송되지 않습니다." />
+<link rel="icon" type="image/png" href="assets/favicon.png" media="(prefers-color-scheme: light)" />
+<link rel="icon" type="image/png" href="assets/favicon-dark.png" media="(prefers-color-scheme: dark)" />
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
 <style>
   :root {
-    --bg: #f6f7f9; --card: #fff; --text: #1a1d23; --muted: #6b7280;
-    --border: #e3e6eb; --accent: #2563eb; --accent-weak: #e8efff; --on-accent: #fff;
-    --ok: #15803d; --err: #b91c1c;
+    --bg: #ffffff; --card: #f6f6f7; --text: #151515; --muted: #4b4f57;
+    --border: #e2e3e6; --brand: #f0612e; --brand-press: #d9531f; --on-brand: #fff;
+    --ok: #13803a; --err: #c0262d; --err-bg: #fdecec;
     --safe-b: env(safe-area-inset-bottom, 0px);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0f1115; --card: #181b21; --text: #e8eaee; --muted: #9aa1ad;
-      --border: #2a2f38; --accent: #6b9bff; --accent-weak: #1c2740; --on-accent: #0b1020;
-      --ok: #4ade80; --err: #f87171;
+      --bg: #121212; --card: #1e1f22; --text: #f2f2f2; --muted: #c4c7cd;
+      --border: #34363b; --brand: #f26b3a; --brand-press: #ff7d4f; --on-brand: #fff;
+      --ok: #4ade80; --err: #ff8a8a; --err-bg: #3a1f20;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
-    touch-action: manipulation;
+    font: 18px/1.6 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    word-break: keep-all; touch-action: manipulation;
   }
   main {
-    max-width: 720px; margin: 0 auto;
-    padding: 24px max(16px, env(safe-area-inset-left)) calc(120px + var(--safe-b)) max(16px, env(safe-area-inset-right));
+    max-width: 560px; margin: 0 auto;
+    padding: 20px max(20px, env(safe-area-inset-left)) calc(40px + var(--safe-b)) max(20px, env(safe-area-inset-right));
   }
-  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
-  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
-  .sub b { color: var(--text); }
+  .logo { display: block; height: 22px; width: auto; margin: 4px 0 28px; }
+  h1 { font-size: 28px; line-height: 1.35; margin: 0 0 10px; letter-spacing: -0.02em; }
+  .lead { margin: 0 0 28px; color: var(--muted); font-size: 19px; }
+  .lead b { color: var(--text); }
 
-  /* 선택 영역: 모바일에선 큰 탭 버튼, 데스크톱에선 드롭존 */
-  .drop {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-    min-height: 168px; border: 2px dashed var(--border); border-radius: 16px;
-    background: var(--card); padding: 24px 16px; text-align: center; cursor: pointer;
-    transition: border-color .15s, background .15s;
-  }
-  .drop:active, .drop.over { border-color: var(--accent); background: var(--accent-weak); }
-  .drop svg { width: 36px; height: 36px; color: var(--accent); }
-  .drop strong { font-size: 17px; }
-  .drop span { color: var(--muted); font-size: 13px; }
-  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-  .drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .desk { display: none; }
-  @media (hover: hover) and (pointer: fine) { .desk { display: inline; } .mob { display: none; } }
-
-  /* 결과 목록 */
-  .status { color: var(--muted); font-size: 14px; margin: 16px 0 8px; min-height: 21px; }
-  ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-  li {
-    display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center;
-    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 10px;
-  }
-  li img, li .ph { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; background: var(--border); display: block; }
-  li .ph { animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: .45; } }
-  .info { min-width: 0; }
-  .name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { color: var(--muted); font-size: 13px; }
-  .meta .ok { color: var(--ok); font-weight: 600; } .meta .err { color: var(--err); }
-
-  button {
-    font: inherit; font-weight: 600; border: 0; border-radius: 12px; min-height: 44px; padding: 0 16px;
-    cursor: pointer; background: var(--accent); color: var(--on-accent);
-  }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-  button.sm { min-height: 40px; padding: 0 14px; font-size: 14px; background: var(--accent-weak); color: var(--accent); }
-  button:disabled { opacity: .5; cursor: default; }
-
-  /* 좁은 화면: 저장 버튼을 카드 아래 전체 폭으로 */
-  @media (max-width: 420px) {
-    li { grid-template-columns: 56px 1fr; }
-    li img, li .ph { width: 56px; height: 56px; }
-    li .act { grid-column: 1 / -1; }
-    li .act button { width: 100%; }
-    li .act:empty { display: none; }
+  /* 사용 순서 */
+  .steps { list-style: none; margin: 0 0 28px; padding: 0; display: grid; gap: 14px; counter-reset: s; }
+  .steps li { display: flex; gap: 14px; align-items: flex-start; font-size: 18px; }
+  .steps li::before {
+    counter-increment: s; content: counter(s);
+    flex: 0 0 32px; height: 32px; border-radius: 50%; margin-top: 1px;
+    display: grid; place-items: center; font-weight: 700; font-size: 17px;
+    background: var(--brand); color: var(--on-brand);
   }
 
-  /* 하단 고정 액션바: 엄지 영역 + 홈 인디케이터 회피 */
-  .dock {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-    padding: 12px max(16px, env(safe-area-inset-right)) calc(12px + var(--safe-b)) max(16px, env(safe-area-inset-left));
-    background: color-mix(in srgb, var(--bg) 88%, transparent);
-    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-    border-top: 1px solid var(--border);
+  /* 버튼 */
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+    min-height: 60px; padding: 0 20px; border: 0; border-radius: 14px; cursor: pointer;
+    font: inherit; font-size: 20px; font-weight: 700; text-decoration: none;
+    background: var(--brand); color: var(--on-brand);
   }
-  .dock[hidden] { display: none; }
-  .dock .in { max-width: 720px; margin: 0 auto; display: flex; gap: 8px; }
-  .dock #saveAll { flex: 1; }
+  .btn:active { background: var(--brand-press); }
+  .btn:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+  .btn.secondary { background: transparent; color: var(--text); border: 2px solid var(--border); font-size: 18px; min-height: 56px; }
+  .btn svg { width: 26px; height: 26px; flex: none; }
+  input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-.tip { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+  /* 데스크톱 전용 드래그 앤 드롭 */
+  .drop { border-radius: 18px; outline: 2px dashed transparent; outline-offset: 8px; transition: outline-color .15s; }
+  .drop.over { outline-color: var(--brand); }
+  .drop-hint { display: none; text-align: center; color: var(--muted); font-size: 16px; margin: 12px 0 0; }
+  @media (hover: hover) and (pointer: fine) { .drop-hint { display: block; } }
+
+  .privacy { display: flex; gap: 8px; align-items: flex-start; margin: 24px 0 0; color: var(--muted); font-size: 16px; }
+  .privacy svg { flex: none; width: 20px; height: 20px; margin-top: 3px; }
+
+  /* 결과 화면 */
+  .card { background: var(--card); border-radius: 18px; padding: 20px; }
+  .preview {
+    display: block; width: 100%; max-height: 320px; object-fit: contain; border-radius: 12px;
+    background: #fff; border: 1px solid var(--border); margin-bottom: 18px;
+    -webkit-touch-callout: default;
+  }
+  .result-title { display: flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 700; margin: 0 0 6px; }
+  .result-title svg { width: 28px; height: 28px; color: var(--ok); flex: none; }
+  .sizes { margin: 0 0 20px; font-size: 18px; color: var(--muted); }
+  .sizes b { color: var(--text); }
+  .tip { margin: 14px 0 0; font-size: 17px; color: var(--muted); }
   .tip b { color: var(--text); }
-  .hint { margin: 16px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-weak); font-size: 14px; }
-  .hint[hidden] { display: none; }
-  li img { -webkit-touch-callout: default; }
-  footer { margin-top: 32px; color: var(--muted); font-size: 12px; text-align: center; }
+  .stack { display: grid; gap: 12px; margin-top: 20px; }
+
+  .busy { text-align: center; padding: 48px 20px; }
+  .spinner {
+    width: 48px; height: 48px; margin: 0 auto 18px; border-radius: 50%;
+    border: 5px solid var(--border); border-top-color: var(--brand); animation: spin .9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .busy p { margin: 0; font-size: 20px; font-weight: 600; }
+
+  .error { background: var(--err-bg); color: var(--text); border-radius: 18px; padding: 20px; }
+  .error strong { display: block; color: var(--err); font-size: 20px; margin-bottom: 6px; }
+  .notice { margin: 16px 0 0; padding: 16px; border-radius: 14px; background: var(--card); font-size: 17px; }
+
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 </style>
 </head>
 <body>
 <main>
-  <h1>인감 이미지 리사이저</h1>
-  <p class="sub">JPG · PNG · 아이폰 HEIC · 안드로이드 사진을 전자서명 업로드용 <b>1.8MB 이하</b>로 줄여드려요.<br><b>내 기기 안에서만 처리</b>되고 서버로 업로드되지 않습니다.</p>
+  <picture>
+    <source srcset="assets/logo-dark.svg" media="(prefers-color-scheme: dark)" />
+    <img class="logo" src="assets/logo.svg" alt="goodnews RE100" width="150" height="22" />
+  </picture>
 
-  <label class="drop" id="drop">
-    <input type="file" id="file" accept="image/*,.heic,.heif" />
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-    <strong><span class="mob">탭해서 사진 선택</span><span class="desk">클릭하거나 사진을 끌어다 놓기</span></strong>
-    <span>투명 배경 PNG는 투명도 유지</span>
-  </label>
+  <h1>인감 이미지 용량 줄이기</h1>
+  <p class="lead">전자계약에 올릴 수 있도록<br>도장 사진을 <b>2MB보다 작게</b> 줄여 드려요.</p>
 
+  <!-- 1. 처음 화면 -->
+  <section id="viewStart">
+    <ol class="steps">
+      <li><span>흰 종이에 도장을 찍고, 휴대폰으로 사진을 찍어 주세요.</span></li>
+      <li><span>아래 <b>[사진 선택하기]</b>를 눌러 그 사진을 골라 주세요.</span></li>
+      <li><span>줄어든 사진을 저장한 뒤, 전자계약에 올려 주세요.</span></li>
+    </ol>
+    <div class="drop" id="drop">
+      <label class="btn" for="file">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        사진 선택하기
+      </label>
+      <p class="drop-hint">또는 사진 파일을 이 화면에 끌어다 놓으세요</p>
+    </div>
+  </section>
 
-  <p class="tip tip-ios">저장을 누르면 공유 창이 열려요. <b>'이미지 저장'</b>을 누르면 사진 앱에 저장됩니다.</p>
-  <p class="tip tip-android">저장한 이미지는 <b>다운로드 폴더</b>에 들어가고, 갤러리 앱에서도 볼 수 있어요.</p>
-  <div class="hint" id="hint" hidden>
-    이 브라우저에서는 사진 앱으로 바로 저장할 수 없어요.<br>
-    <b>미리보기 이미지를 길게 눌러 '사진 앱에 저장'</b>하거나, Safari·Chrome으로 열어 주세요.
-  </div>
-  <div class="status" id="status" aria-live="polite"></div>
-  <ul id="list"></ul>
+  <!-- 2. 처리 중 -->
+  <section id="viewBusy" class="card busy" hidden aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>사진을 줄이는 중이에요…</p>
+  </section>
 
-  <footer>Canvas API로 브라우저에서 처리 · 원본 파일은 바뀌지 않습니다</footer>
+  <!-- 3. 완료 -->
+  <section id="viewDone" hidden>
+    <div class="card">
+      <img class="preview" id="preview" alt="줄어든 도장 사진 미리보기" />
+      <p class="result-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
+        다 됐어요
+      </p>
+      <p class="sizes" id="sizes"></p>
+      <button class="btn" id="save" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        <span id="saveLabel">저장하기</span>
+      </button>
+      <p class="tip" id="saveTip"></p>
+    </div>
+    <div class="notice" id="hint" hidden>
+      이 화면에서는 사진 앱으로 바로 저장할 수 없어요.<br>
+      <b>위의 사진을 손가락으로 길게 누른 뒤 '사진 앱에 저장'</b>을 눌러 주세요.
+    </div>
+    <div class="stack">
+      <label class="btn secondary" for="file">다른 사진 선택하기</label>
+    </div>
+  </section>
+
+  <!-- 4. 오류 -->
+  <section id="viewError" hidden>
+    <div class="error" role="alert">
+      <strong id="errTitle"></strong>
+      <span id="errBody"></span>
+    </div>
+    <div class="stack">
+      <label class="btn" for="file">다시 선택하기</label>
+    </div>
+  </section>
+
+  <p class="privacy">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    사진은 이 기기 안에서만 처리되고, 어디에도 전송되지 않아요.
+  </p>
+
+  <input type="file" id="file" accept="image/*,.heic,.heif" />
 </main>
-
-<div class="dock" id="dock" hidden>
-  <div class="in">
-    <button class="ghost" id="clear">지우기</button>
-    <button id="saveAll" disabled>전체 저장</button>
-  </div>
-</div>
-
 <script src="app.js"></script>
 </body>
 </html>
