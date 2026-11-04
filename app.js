@@ -135,8 +135,8 @@ function download(blob, name) {
 
 // 저장 전략: 휴대폰은 공유 시트(→ "이미지 저장"으로 사진 앱에 저장),
 // 데스크톱은 일반 다운로드. 사용자가 공유 시트를 닫으면(AbortError) 조용히 무시.
-async function saveFiles(items) {
-  const files = items.map((r) => new File([r.blob], r.name, { type: r.blob.type }));
+async function saveFile(item) {
+  const files = [new File([item.blob], item.name, { type: item.blob.type })];
   // iOS: 다운로드는 '파일' 앱으로 가므로 공유 시트("이미지 저장")로 사진 앱에 저장.
   // Android·데스크톱: 일반 다운로드 (Android는 Download 폴더 → 갤러리에 바로 보임)
   if (isIOS) {
@@ -149,10 +149,7 @@ async function saveFiles(items) {
     }
     return;
   }
-  for (const r of items) {
-    download(r.blob, r.name);
-    await new Promise((res) => setTimeout(res, 300));
-  }
+  download(item.blob, item.name);
 }
 
 document.querySelector(isIOS ? '.tip-android' : '.tip-ios')?.remove();
@@ -193,7 +190,7 @@ async function handle(file, li, target) {
     const btn = document.createElement('button');
     btn.className = 'sm';
     btn.textContent = isIOS ? '사진에 저장' : '저장';
-    btn.onclick = () => saveFiles([item]);
+    btn.onclick = () => saveFile(item);
     li.querySelector('.act').appendChild(btn);
   } catch (e) {
     li.querySelector('.ph')?.style.setProperty('animation', 'none');
@@ -202,26 +199,25 @@ async function handle(file, li, target) {
   }
 }
 
-function updateStatus(done, total) {
-  $('status').textContent = done < total ? `처리 중 ${done} / ${total}` : `${results.length}개 완료`;
-  $('saveAll').disabled = results.length === 0;
-  const label = isIOS ? '사진에 저장' : '저장';
-  $('saveAll').textContent = results.length > 1 ? `전체 ${label} (${results.length})` : label;
+function reset() {
+  results.forEach((r) => URL.revokeObjectURL(r.url));
+  results.length = 0; $('list').innerHTML = ''; $('status').textContent = ''; $('dock').hidden = true;
 }
 
+// 인감 이미지는 한 장만 처리. 새 사진을 고르면 이전 결과를 대체
 async function processFiles(files) {
-  files = files.filter((f) => f.type.startsWith('image/') || isHeic(f));
-  if (!files.length) return;
-  const target = TARGET_BYTES;
+  const file = files.find((f) => f.type.startsWith('image/') || isHeic(f));
+  if (!file || busy) return;
+  reset();
   $('dock').hidden = false;
-  const rows = files.map(addRow);
+  $('saveAll').disabled = true;
+  $('status').textContent = '처리 중…';
   busy++;
-  for (let i = 0; i < files.length; i++) { // 순차 처리로 휴대폰 메모리 보호
-    updateStatus(i, files.length);
-    await handle(files[i], rows[i], target);
-  }
+  await handle(file, addRow(file), TARGET_BYTES);
   busy--;
-  updateStatus(files.length, files.length);
+  $('status').textContent = results.length ? '완료' : '';
+  $('saveAll').disabled = results.length === 0;
+  $('saveAll').textContent = isIOS ? '사진에 저장' : '저장';
 }
 
 $('file').addEventListener('change', (e) => { processFiles([...e.target.files]); e.target.value = ''; });
@@ -230,9 +226,5 @@ const drop = $('drop');
 ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', (e) => processFiles([...e.dataTransfer.files]));
 
-$('saveAll').addEventListener('click', () => saveFiles(results));
-$('clear').addEventListener('click', () => {
-  if (busy) return;
-  results.forEach((r) => URL.revokeObjectURL(r.url));
-  results.length = 0; $('list').innerHTML = ''; $('status').textContent = ''; $('dock').hidden = true;
-});
+$('saveAll').addEventListener('click', () => results[0] && saveFile(results[0]));
+$('clear').addEventListener('click', () => { if (!busy) reset(); });
