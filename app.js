@@ -151,8 +151,6 @@ async function saveFile(item) {
     return;
   }
   download(item.blob, item.name);
-  // 웹에서는 다운로드가 실제로 끝났는지 알 수 없으므로 요청 직후 알림
-  if (isAndroid) showSaved();
 }
 
 // ---------- 화면 ----------
@@ -161,10 +159,9 @@ function show(id) {
   views.forEach((v) => { $(v).hidden = v !== id; });
 }
 
+// iOS 공유 시트를 닫은 뒤에만 사용 (Android는 결과 화면 문구로 충분해 모달 없음)
 function showSaved() {
-  $('savedBody').innerHTML = isAndroid
-    ? '<b>갤러리 앱의 다운로드(Download) 폴더</b>에서 확인하실 수 있습니다.<br>이제 전자계약에 올려 주십시오.'
-    : '이제 전자계약에 올려 주십시오.';
+  $('savedBody').textContent = '이제 전자계약에 올려 주십시오.';
   if ($('saved').open) return;
   $('saved').showModal();
   // showModal()은 첫 버튼에 자동 포커스를 주는데, Safari는 이때 터치로 열었어도
@@ -187,12 +184,14 @@ function showHint() {
 // 저장 위치는 OS마다 달라서 버튼 이름과 안내 문구도 다르게
 $('saveLabel').textContent = isIOS ? '사진에 저장하기' : '저장하기';
 $('saveTip').innerHTML = isIOS
-  ? "누르면 창이 열립니다. 거기서 <b>'이미지 저장'</b>을 눌러 주십시오."
+  ? "아래 저장하기 버튼을 누르면 창이 열립니다.<br>거기서 <b>'이미지 저장'</b>을 눌러 주십시오."
   : isAndroid
     ? "<b>갤러리 앱의 다운로드(Download) 폴더</b>에 자동으로 저장되었습니다."
     : isTouch
       ? "저장한 사진은 <b>갤러리 앱의 다운로드(Download) 폴더</b>에서 찾을 수 있습니다."
       : '<b>다운로드 폴더</b>에 저장됩니다.';
+// iOS는 아직 저장 전이므로 '완료되었습니다'를 띄우지 않음
+$('resultTitle').hidden = isIOS;
 // Android는 자동 저장되므로 버튼은 다시 저장할 때만 사용
 if (isAndroid) $('saveLabel').textContent = '다시 저장하기';
 
