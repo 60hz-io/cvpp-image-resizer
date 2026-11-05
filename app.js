@@ -13,6 +13,7 @@ const isTouch = matchMedia('(pointer: coarse)').matches;
 // iPadOS는 데스크톱 UA(Macintosh)를 쓰므로 터치 포인트로 구분
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
   (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+const isAndroid = /Android/i.test(navigator.userAgent);
 
 function isHeic(file) {
   return /image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
@@ -141,7 +142,8 @@ async function saveFile(item) {
   if (isIOS) {
     // share()는 탭 직후(사용자 제스처 안)에 호출돼야 하므로 앞에 await를 두지 않음
     if (navigator.canShare?.({ files })) {
-      try { await navigator.share({ files }); }
+      // 시트에서 어떤 항목(이미지 저장·AirDrop 등)을 골랐는지는 알 수 없고, 완료 여부만 알 수 있음
+      try { await navigator.share({ files }); showSaved(); }
       catch (e) { if (e.name !== 'AbortError') showHint(); }
     } else {
       showHint(); // 카카오톡 등 앱 내 브라우저: 다운로드하면 '파일'로 가버리므로 안내만
@@ -149,12 +151,21 @@ async function saveFile(item) {
     return;
   }
   download(item.blob, item.name);
+  // 웹에서는 다운로드가 실제로 끝났는지 알 수 없으므로 요청 직후 알림
+  if (isAndroid) showSaved();
 }
 
 // ---------- 화면 ----------
-const views = ['viewStart', 'viewBusy', 'viewDone', 'viewError'];
+const views = ['viewIntro', 'viewStart', 'viewBusy', 'viewDone', 'viewError'];
 function show(id) {
   views.forEach((v) => { $(v).hidden = v !== id; });
+}
+
+function showSaved() {
+  $('savedBody').innerHTML = isAndroid
+    ? '<b>갤러리 앱의 다운로드(Download) 폴더</b>에서 확인하실 수 있습니다.<br>이제 전자계약에 올려 주십시오.'
+    : '이제 전자계약에 올려 주십시오.';
+  if (!$('saved').open) $('saved').showModal();
 }
 
 function showError(title, body) {
@@ -172,12 +183,17 @@ function showHint() {
 $('saveLabel').textContent = isIOS ? '사진에 저장하기' : '저장하기';
 $('saveTip').innerHTML = isIOS
   ? "누르면 창이 열립니다. 거기서 <b>'이미지 저장'</b>을 눌러 주십시오."
-  : isTouch
-    ? "저장한 사진은 <b>갤러리 앱의 다운로드(Download) 폴더</b>에서 찾을 수 있습니다."
-    : '<b>다운로드 폴더</b>에 저장됩니다.';
+  : isAndroid
+    ? "<b>갤러리 앱의 다운로드(Download) 폴더</b>에 자동으로 저장되었습니다."
+    : isTouch
+      ? "저장한 사진은 <b>갤러리 앱의 다운로드(Download) 폴더</b>에서 찾을 수 있습니다."
+      : '<b>다운로드 폴더</b>에 저장됩니다.';
+// Android는 자동 저장되므로 버튼은 다시 저장할 때만 사용
+if (isAndroid) $('saveLabel').textContent = '다시 저장하기';
 
 async function processFiles(files) {
-  if (busy || !files.length) return;
+  // 온보딩 확인 전에는 끌어다 놓기 등으로 들어온 파일을 처리하지 않음
+  if (busy || !files.length || !$('viewIntro').hidden) return;
   const file = files.find((f) => f.type.startsWith('image/') || isHeic(f));
   if (!file) {
     showError('사진 파일이 아닙니다', '도장을 찍은 사진을 골라 주십시오.');
@@ -199,6 +215,7 @@ async function processFiles(files) {
     $('sizes').innerHTML = `${fmt(file.size)} → <b>${fmt(blob.size)}</b> 로 줄었습니다.<br>이제 전자계약에 올릴 수 있습니다.`;
     $('hint').hidden = true;
     show('viewDone');
+    if (isAndroid) saveFile(current); // Android: 줄이자마자 갤러리에 자동 저장
   } catch (e) {
     showError('사진을 줄이지 못했습니다', e.message || '다른 사진으로 다시 시도해 주십시오.');
   } finally {
@@ -209,6 +226,7 @@ async function processFiles(files) {
 
 $('file').addEventListener('change', (e) => { processFiles([...e.target.files]); e.target.value = ''; });
 $('save').addEventListener('click', () => current && saveFile(current));
+$('agree').addEventListener('click', () => show('viewStart'));
 
 // 데스크톱: 화면 어디든 끌어다 놓기
 const drop = $('drop');
