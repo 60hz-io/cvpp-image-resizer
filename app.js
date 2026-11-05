@@ -144,7 +144,9 @@ async function saveFile(item) {
       try { await navigator.share({ files }); showSaved(); }
       catch (e) { if (e.name !== 'AbortError') showHint(); }
     } else {
-      showHint(); // 카카오톡 등 앱 내 브라우저: 다운로드하면 '파일'로 가버리므로 안내만
+      // 파일 공유 미지원(iOS 15 미만, 일부 앱 내 브라우저, HTTP 접속):
+      // 다운로드하면 '파일' 앱으로 가버리므로 길게 눌러 저장하도록 안내만
+      showHint();
     }
     return;
   }
