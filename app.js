@@ -1,14 +1,12 @@
 // 업로드 대상(전자서명 서비스) 제한은 2MB. OS마다 MB를 10^6 또는 2^20으로 세므로
 // 어느 쪽으로 해석해도 안전하게 1,800,000바이트로 고정
 const TARGET_BYTES = 1_800_000;
-const MB = 1_000_000; // 표시는 iPhone/macOS와 같은 10진 단위
 // iOS Safari 캔버스 최대 면적(16,777,216px) 이하로 유지 — 초과 시 toBlob이 null 반환
 const MAX_PIXELS = 16_000_000;
 const $ = (id) => document.getElementById(id);
 let current = null; // { blob, name, url }
 let busy = false;
 
-const fmt = (b) => b >= MB ? (b / MB).toFixed(2) + ' MB' : Math.round(b / 1000) + ' KB';
 const isTouch = matchMedia('(pointer: coarse)').matches;
 // iPadOS는 데스크톱 UA(Macintosh)를 쓰므로 터치 포인트로 구분
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
@@ -165,7 +163,12 @@ function showSaved() {
   $('savedBody').innerHTML = isAndroid
     ? '<b>갤러리 앱의 다운로드(Download) 폴더</b>에서 확인하실 수 있습니다.<br>이제 전자계약에 올려 주십시오.'
     : '이제 전자계약에 올려 주십시오.';
-  if (!$('saved').open) $('saved').showModal();
+  if ($('saved').open) return;
+  $('saved').showModal();
+  // showModal()은 첫 버튼에 자동 포커스를 주는데, Safari는 이때 터치로 열었어도
+  // :focus-visible 링을 그림(WebKit 버그 247416). 모달 자체로 포커스를 옮겨 링이 안 보이게 함.
+  // 키보드 사용자는 Tab 한 번으로 [확인]에 도달하며, 그때는 포커스 링이 정상 표시됨.
+  $('saved').focus();
 }
 
 function showError(title, body) {
@@ -212,7 +215,6 @@ async function processFiles(files) {
 
     current = { blob, name: outName(file.name, type), url: URL.createObjectURL(blob) };
     $('preview').src = current.url;
-    $('sizes').innerHTML = `${fmt(file.size)} → <b>${fmt(blob.size)}</b> 로 줄었습니다.<br>이제 전자계약에 올릴 수 있습니다.`;
     $('hint').hidden = true;
     show('viewDone');
     if (isAndroid) saveFile(current); // Android: 줄이자마자 갤러리에 자동 저장

@@ -27,6 +27,9 @@
     --bg: #ffffff; --card: #f6f6f7; --text: #151515; --muted: #4b4f57;
     --border: #e2e3e6; --brand: #f0612e; --brand-press: #d9531f; --on-brand: #fff;
     --ok: #13803a; --err: #c0262d; --err-bg: #fdecec;
+    /* 모달처럼 화면 위에 뜨는 면. 라이트는 그림자로, 다크는 더 밝은 면 + 얇은 윤곽선으로 띄움 */
+    --surface: #ffffff; --surface-edge: transparent;
+    --scrim: rgba(0, 0, 0, .45); --surface-shadow: 0 12px 32px rgba(0, 0, 0, .18);
     --safe-b: env(safe-area-inset-bottom, 0px);
   }
   @media (prefers-color-scheme: dark) {
@@ -34,6 +37,9 @@
       --bg: #121212; --card: #1e1f22; --text: #f2f2f2; --muted: #c4c7cd;
       --border: #34363b; --brand: #f26b3a; --brand-press: #ff7d4f; --on-brand: #fff;
       --ok: #4ade80; --err: #ff8a8a; --err-bg: #3a1f20;
+      /* Apple HIG의 elevated 배경(#2C2C2E): 다크 모드에선 그림자가 안 보이므로 면을 밝혀서 구분 */
+      --surface: #2c2c2e; --surface-edge: rgba(255, 255, 255, .1);
+      --scrim: rgba(0, 0, 0, .6); --surface-shadow: 0 12px 32px rgba(0, 0, 0, .5);
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -97,9 +103,7 @@
   }
   .result-title { display: flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 700; margin: 0 0 6px; }
   .result-title svg { width: 28px; height: 28px; color: var(--ok); flex: none; }
-  .sizes { margin: 0 0 20px; font-size: 18px; color: var(--muted); }
-  .sizes b { color: var(--text); }
-  .tip { margin: 14px 0 0; font-size: 17px; color: var(--muted); }
+  .tip { margin: 0 0 20px; font-size: 17px; color: var(--muted); }
   .tip b { color: var(--text); }
   .stack { display: grid; gap: 12px; margin-top: 20px; }
 
@@ -124,9 +128,11 @@
   .compare .eq { font-size: 34px; font-weight: 800; color: var(--brand); }
 
   /* 저장 완료 모달 */
-  .saved { width: min(calc(100% - 40px), 420px); border: 0; border-radius: 20px; padding: 28px 22px 20px;
-    background: var(--bg); color: var(--text); text-align: center; }
-  .saved::backdrop { background: rgba(0, 0, 0, .5); }
+  .saved { width: min(calc(100% - 40px), 420px); border: 1px solid var(--surface-edge); border-radius: 20px; padding: 28px 22px 20px;
+    background: var(--surface); color: var(--text); text-align: center; box-shadow: var(--surface-shadow); }
+  /* 열릴 때 포커스는 모달 자체가 받음 (app.js showSaved 참고) — 모달 테두리에 링을 그리지 않음 */
+  .saved:focus { outline: none; }
+  .saved::backdrop { background: var(--scrim); }
   .saved .ok { width: 64px; height: 64px; margin: 0 auto 12px; color: var(--ok); }
   .saved h2 { margin: 0 0 8px; font-size: 22px; }
   .saved p { margin: 0 0 20px; color: var(--muted); font-size: 17px; }
@@ -231,12 +237,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
         완료되었습니다
       </p>
-      <p class="sizes" id="sizes"></p>
+      <p class="tip" id="saveTip"></p>
       <button class="btn" id="save" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         <span id="saveLabel">저장하기</span>
       </button>
-      <p class="tip" id="saveTip"></p>
     </div>
     <div class="notice" id="hint" hidden>
       이 화면에서는 사진 앱으로 바로 저장할 수 없습니다.<br>
@@ -267,12 +272,13 @@
 </main>
 
 <!-- 저장 완료 알림 (Android 자동 저장 후 / iOS 공유 시트 완료 후) -->
-<dialog class="saved" id="saved" aria-labelledby="savedTitle">
+<dialog class="saved" id="saved" aria-labelledby="savedTitle" tabindex="-1">
   <svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
   <h2 id="savedTitle">저장되었습니다</h2>
   <p id="savedBody"></p>
   <form method="dialog"><button class="btn" type="submit">확인</button></form>
 </dialog>
-<script src="app.js"></script>
+<!-- HTML과 JS가 서로 다른 버전으로 캐시되지 않도록, app.js를 바꿀 때마다 v 값을 올릴 것 -->
+<script src="app.js?v=20261105b"></script>
 </body>
 </html>
